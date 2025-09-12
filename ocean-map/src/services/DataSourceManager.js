@@ -7,6 +7,14 @@ import { eventBus } from '../utils/EventBus.js';
  */
 export class DataSourceManager {
   constructor() {
+    // Base URL for backend API (set via Vite env on hosted deployments)
+    try {
+      this.apiBase = (typeof import !== 'undefined' && import.meta && import.meta.env && import.meta.env.VITE_API_BASE)
+        ? String(import.meta.env.VITE_API_BASE).replace(/\/+$/, '')
+        : '';
+    } catch (_) {
+      this.apiBase = '';
+    }
     // Use multiple NOAA data sources for comprehensive ocean data coverage
     this.sourceConfig = {
       noaa_rtgsst: {
@@ -485,8 +493,8 @@ export class DataSourceManager {
     }
     // Fallback: direct to backend (bypass Vite proxy). CORS is enabled server-side.
     try {
-      // Try localhost first (works best on macOS browsers), then 127.0.0.1
-      let directUrl = `http://localhost:5176${baseUrl}?${params}`;
+      // Use relative URL for Vercel deployment
+      let directUrl = `${baseUrl}?${params}`;
       const response = await fetch(directUrl, {
         method: 'GET',
         signal: AbortSignal.timeout(60000)
@@ -497,8 +505,8 @@ export class DataSourceManager {
           return { data: result };
         }
       }
-      // Retry with 127.0.0.1 if localhost path didn’t succeed
-      directUrl = `http://127.0.0.1:5176${baseUrl}?${params}`;
+      // Retry with same relative URL (for Vercel deployment)
+      directUrl = `${baseUrl}?${params}`;
       const response2 = await fetch(directUrl, { method: 'GET', signal: AbortSignal.timeout(60000) });
       if (response2.ok) {
         const result = await response2.json();
@@ -643,7 +651,8 @@ export class DataSourceManager {
         date: targetDate
       });
       
-      const url = `/grid/historical?${params}`;
+      const base = (this.apiBase || '').replace(/\/+$/, '');
+      const url = `${base}/grid/historical?${params}`;
       
       let attempt = 0;
       let lastError = null;
@@ -696,6 +705,10 @@ export class DataSourceManager {
       console.error(`❌ Historical data fetch failed for ${targetDate}:`, error.message);
       // Fallback: attempt direct backend call bypassing Vite proxy
       try {
+        // Only use localhost fallback in local dev when no API base is provided
+        if (this.apiBase) {
+          throw error;
+        }
         const { center, region = 2.0 } = bounds;
         const { gridSize = 15 } = options;
         const params = new URLSearchParams({
