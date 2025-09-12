@@ -1,0 +1,17 @@
+{
+  "functions": {
+    "api/grid.js": {
+      "runtime": "@vercel/node"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/grid",
+      "destination": "/api/grid"
+    },
+    {
+      "source": "/grid/historical",
+      "destination": "/api/grid"
+    }
+  ]
+}
