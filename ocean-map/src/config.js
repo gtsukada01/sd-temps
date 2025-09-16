@@ -154,14 +154,18 @@ export const CONFIG = {
 };
 
 // Tile endpoints and encoding metadata for experimental value tiles
+const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE)
+  ? String(import.meta.env.VITE_API_BASE).replace(/\/+$/, '')
+  : '';
+
 export const TILE_CONFIG = {
   SST: {
     // Styled PNG tiles (server colorized) for quick visual validation
-    STYLED_URL_TEMPLATE: '/tiles/sst/styled/current/{z}/{x}/{y}.png',
+    STYLED_URL_TEMPLATE: `${API_BASE}/tiles/sst/styled/current/{z}/{x}/{y}.png`,
     // RGB-encoded value tiles (24-bit) for GPU shading
-    VALUE_URL_TEMPLATE: '/tiles/sst/current/{z}/{x}/{y}.png',
+    VALUE_URL_TEMPLATE: `${API_BASE}/tiles/sst/current/{z}/{x}/{y}.png`,
     // Metadata: scale/offset for decoding
-    META_URL: '/tiles/sst/meta?date=current',
+    META_URL: `${API_BASE}/tiles/sst/meta?date=current`,
     // Default encoding if META is unreachable
     DEFAULT_OFFSET: -10.0, // deg C
     DEFAULT_SCALE: 0.01,   // deg C per encoded unit

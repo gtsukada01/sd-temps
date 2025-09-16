@@ -9,7 +9,7 @@ export class DataSourceManager {
   constructor() {
     // Base URL for backend API (set via Vite env on hosted deployments)
     try {
-      this.apiBase = (typeof import !== 'undefined' && import.meta && import.meta.env && import.meta.env.VITE_API_BASE)
+      this.apiBase = (import.meta && import.meta.env && import.meta.env.VITE_API_BASE)
         ? String(import.meta.env.VITE_API_BASE).replace(/\/+$/, '')
         : '';
     } catch (_) {
@@ -449,8 +449,9 @@ export class DataSourceManager {
     const { center, region = 2.0 } = bounds;
     const { gridSize = 15, endpoint = '/grid' } = options;
     
-    // Build URL with query parameters for GET request (proxied by Vite)
-    const baseUrl = endpoint;
+    // Build URL with query parameters for GET request (proxied by Vite or absolute via API base)
+    const base = (this.apiBase || '').replace(/\/+$/, '');
+    const baseUrl = `${base}${endpoint}`;
     const params = new URLSearchParams({
       lat: center.lat,
       lon: center.lon,
@@ -491,10 +492,11 @@ export class DataSourceManager {
         await new Promise(res => setTimeout(res, delay));
       }
     }
-    // Fallback: direct to backend (bypass Vite proxy). CORS is enabled server-side.
+    // Fallback: direct to backend (bypass Vite proxy) only in local dev with no API base
     try {
-      // Use relative URL for Vercel deployment
-      let directUrl = `${baseUrl}?${params}`;
+      if (this.apiBase) throw lastError || new Error('NOAA request failed');
+      // Try localhost first (works best on macOS browsers), then 127.0.0.1
+      let directUrl = `http://localhost:5176${endpoint}?${params}`;
       const response = await fetch(directUrl, {
         method: 'GET',
         signal: AbortSignal.timeout(60000)
@@ -505,8 +507,8 @@ export class DataSourceManager {
           return { data: result };
         }
       }
-      // Retry with same relative URL (for Vercel deployment)
-      directUrl = `${baseUrl}?${params}`;
+      // Retry with 127.0.0.1 if localhost path didn’t succeed
+      directUrl = `http://127.0.0.1:5176${endpoint}?${params}`;
       const response2 = await fetch(directUrl, { method: 'GET', signal: AbortSignal.timeout(60000) });
       if (response2.ok) {
         const result = await response2.json();

@@ -1,4 +1,4 @@
-// Vercel serverless function for NOAA data (minimal, correct)
+// Vercel serverless function for historical NOAA temperature data
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -12,7 +12,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { lat = 32.7, lon = -117.2, size = 15, region = 2.0 } = req.query;
+    const {
+      lat = 32.7,
+      lon = -117.2,
+      size = 15,
+      region = 2.0,
+      date // YYYY-MM-DD format
+    } = req.query;
+
+    if (!date) {
+      throw new Error('Date parameter is required (YYYY-MM-DD format)');
+    }
 
     const centerLat = parseFloat(lat);
     const centerLon = parseFloat(lon);
@@ -25,10 +35,14 @@ export default async function handler(req, res) {
     const west = centerLon - regionSize;
     const east = centerLon + regionSize;
 
-    // Build ERDDAP JSON URL (try normal then reversed latitude order)
+    // Parse date and format for ERDDAP
+    const targetDate = new Date(date);
+    const dateStr = targetDate.toISOString().split('T')[0];
+
+    // Build ERDDAP JSON URL for historical data
     const base = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.json';
     const buildUrl = (southV, northV) => (
-      `${base}?analysed_sst[(last)][${southV}:${northV}][${west}:${east}]`
+      `${base}?analysed_sst[(${dateStr})][${southV}:${northV}][${west}:${east}]`
     );
 
     const urls = [
@@ -57,21 +71,22 @@ export default async function handler(req, res) {
     let response = null;
     let lastStatus = null;
     for (const u of urls) {
-      console.log('Fetching from NOAA:', u);
+      console.log('Fetching historical from NOAA:', u);
       const r = await fetchWithTimeout(u, 30000);
       lastStatus = r.status;
       if (r.ok) {
         response = r;
         break;
       }
-      // Retry next variant only for 404/400 family; otherwise fail fast on server errors
+      // Retry next variant only for 404/400 family
       if (r.status >= 500) {
         break;
       }
     }
 
     if (!response || !response.ok) {
-      throw new Error(`NOAA API error: ${lastStatus || 'unknown'}`);
+      // If historical data not available, return error
+      throw new Error(`Historical data not available for ${date}: ${lastStatus || 'unknown'}`);
     }
 
     const data = await response.json();
@@ -79,7 +94,7 @@ export default async function handler(req, res) {
     // ERDDAP JSON Table Writer: table.rows = [time, lat, lon, sst]
     const rows = data?.table?.rows || [];
     if (!Array.isArray(rows) || rows.length === 0) {
-      throw new Error('No NOAA data rows returned');
+      throw new Error(`No historical data available for ${date}`);
     }
 
     // Build 2D grid_data to match frontend expectations
@@ -87,6 +102,7 @@ export default async function handler(req, res) {
     const lons = Array.from(new Set(rows.map(r => parseFloat(r[2])))).sort((a, b) => a - b);
     const tempMap = new Map(); // key `${lat}|${lon}` -> temp
     let dataTime = null;
+
     for (const r of rows) {
       const t = r[0];
       if (!dataTime) dataTime = t;
@@ -99,7 +115,7 @@ export default async function handler(req, res) {
       if (v < -5 || v > 40) continue;
       const la = parseFloat(r[1]);
       const loRaw = parseFloat(r[2]);
-      const lo = loRaw > 180 ? (loRaw - 360) : loRaw; // normalize for output only
+      const lo = loRaw > 180 ? (loRaw - 360) : loRaw; // normalize for output
       tempMap.set(`${la}|${lo}`, Number.parseFloat(v.toFixed(1)));
     }
 
@@ -118,19 +134,20 @@ export default async function handler(req, res) {
       grid_size: grid_data.length,
       region_size_degrees: regionSize,
       grid_data,
-      source: 'NOAA RTGSST',
+      source: 'NOAA OI SST Historical',
       timestamp: new Date().toISOString(),
-      data_time: dataTime || null,
+      data_time: dataTime || dateStr,
+      requested_date: date,
       cache_info: { cached: false }
     };
 
     res.status(200).json(result);
 
   } catch (error) {
-    console.error('NOAA API error:', error);
+    console.error('Historical NOAA API error:', error);
     res.status(500).json({
       error: error.message || String(error),
-      source: 'NOAA RTGSST'
+      source: 'NOAA Historical'
     });
   }
 }
