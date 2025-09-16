@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/grid.js": {
-      "runtime": "@vercel/node"
+      "runtime": "nodejs20.x"
     }
   },
   "rewrites": [
