@@ -53,7 +53,17 @@
   * {
     @apply border-gray-200;
   }
+  html, body {
+    @apply h-full w-full m-0 p-0 overflow-hidden;
+  }
   body {
     @apply bg-white text-gray-900;
+  }
+  #root {
+    @apply h-full w-full;
+  }
+  /* Prevent Radix UI from adding body padding */
+  body[data-scroll-locked] {
+    padding-right: 0 !important;
   }
 }
