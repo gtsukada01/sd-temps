@@ -8,7 +8,6 @@
     {
       "source": "/grid",
       "destination": "/api/grid"
-    },
-    
+    }
   ]
 }
