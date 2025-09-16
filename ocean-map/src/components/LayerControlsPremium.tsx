@@ -5,15 +5,16 @@ import { Badge } from './ui/badge'
 import { Progress } from './ui/progress'
 import { Switch } from './ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet'
 import { eventBus } from '../utils/EventBus.js'
 import TemperatureComparisonModalShadcn from './TemperatureComparisonModalShadcn'
 import { CONFIG } from '../config.js'
 import TemperatureScaleCanvas from './TemperatureScaleCanvas'
-import { 
-  Thermometer, 
-  TrendingUp, 
-  Anchor, 
-  Loader2, 
+import {
+  Thermometer,
+  TrendingUp,
+  Anchor,
+  Loader2,
   RefreshCw,
   Waves,
   Activity,
@@ -25,7 +26,8 @@ import {
   EyeOff,
   Satellite,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Layers
 } from 'lucide-react'
 
 interface LayerControlsProps {
@@ -329,12 +331,10 @@ const LayerControlsPremium: React.FC<LayerControlsProps> = ({ map, layerManager 
     }
   }
 
-  return (
-    <TooltipProvider>
-      <div className="fixed top-4 right-4 w-96 z-50">
-        <Card className="bg-white/95 backdrop-blur-md shadow-xl border rounded-xl">
-          <CardContent className="p-2">
-            <div className="space-y-1.5">
+  // Shared controls content that will be used in both desktop and mobile views
+  const controlsContent = (
+    <>
+      <div className="space-y-1.5">
               {layerConfigs.map((config) => {
                 const IconComponent = config.icon
                 const isActive = layers[config.id]
@@ -552,16 +552,74 @@ const LayerControlsPremium: React.FC<LayerControlsProps> = ({ map, layerManager 
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+    </>
+  )
 
-        {/* Temperature Comparison Modal */}
-        <TemperatureComparisonModalShadcn 
+  // State to control Sheet open/close on mobile
+  const [sheetOpen, setSheetOpen] = useState(false)
+
+  // Count active layers for the mobile button badge
+  const activeLayerCount = Object.values(layers).filter(Boolean).length
+
+  return (
+    <TooltipProvider>
+      <>
+        {/* Desktop View - Hidden on mobile (sm and below) */}
+        <div className="hidden md:block fixed top-4 right-4 w-96 z-50">
+          <Card className="bg-white/95 backdrop-blur-md shadow-xl border rounded-xl">
+            <CardContent className="p-2">
+              {controlsContent}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Mobile View - Sheet with floating button trigger */}
+        <div className="md:hidden">
+          {/* Floating button - visible on mobile only */}
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+            <SheetTrigger asChild>
+              <Button
+                className="fixed top-4 right-4 z-50 h-12 w-12 rounded-full shadow-lg bg-white/95 backdrop-blur-md border hover:bg-gray-50"
+                size="icon"
+                variant="outline"
+              >
+                <div className="relative">
+                  <Layers className="h-5 w-5 text-gray-700" />
+                  {activeLayerCount > 0 && (
+                    <Badge
+                      className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center text-[10px]"
+                      variant="default"
+                    >
+                      {activeLayerCount}
+                    </Badge>
+                  )}
+                </div>
+              </Button>
+            </SheetTrigger>
+            <SheetContent
+              side="right"
+              className="w-[85vw] max-w-md p-0 overflow-y-auto"
+            >
+              <SheetHeader className="p-4 pb-2">
+                <SheetTitle className="flex items-center gap-2">
+                  <Layers className="h-5 w-5" />
+                  Map Layers
+                </SheetTitle>
+              </SheetHeader>
+              <div className="p-4 pt-2">
+                {controlsContent}
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+
+        {/* Temperature Comparison Modal - Works on both mobile and desktop */}
+        <TemperatureComparisonModalShadcn
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           map={map}
         />
-      </div>
+      </>
     </TooltipProvider>
   )
 }
