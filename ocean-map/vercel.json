@@ -3,6 +3,10 @@
     {
       "source": "/grid",
       "destination": "/api/grid"
+    },
+    {
+      "source": "/grid/historical",
+      "destination": "/api/grid"
     }
   ]
 }

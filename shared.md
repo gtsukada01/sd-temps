@@ -539,6 +539,7 @@ No other files were modified.
   - Set **Output Directory** to `dist`.
 - Recommend deleting or archiving the duplicate `Maps/ocean-map` folder once the deploy succeeds to avoid future drift.
 - New 2025-09-16: Adjusted NOAA handler (`api/grid.js`) to clamp bounds and request ERDDAP with explicit strides so the upstream dataset stops returning HTTP 500.
+- Added back Vercel rewrite for `/grid/historical → /api/grid` (both copies) so the comparison modal’s historical fetch no longer 404s in production.
 
 ### **What’s Working**
 - Local dev (`npm install && npm run dev` from `ocean-map/`) renders SST and fishing layers correctly.
