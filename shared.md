@@ -202,6 +202,71 @@ Decision Log (running)
   • ✅ Fishing spots functionality restored
   • ✅ All interactive map features working on Vercel
   • 🌊 Authentic NOAA data instead of localhost dependency
+- 2025-09-15 – MOBILE RESPONSIVENESS & WHITE BORDER ISSUES
+  Summary:
+  • User reported layer controls taking too much space on mobile devices
+  • Implemented mobile-responsive solution using shadcn Sheet component
+  • Discovered persistent white border issues on right and bottom edges
+
+  Work Completed:
+  • Added shadcn Sheet component (`ocean-map/src/components/ui/sheet.tsx`)
+  • Modified LayerControlsPremium.tsx with responsive breakpoints:
+    - Desktop (md+): Fixed panel in top-right corner with Card component
+    - Mobile (sm-): Floating button that opens Sheet drawer from right side
+  • Initial white border fix attempts in globals.css and App.tsx:
+    - Set html/body to h-full w-full with m-0 p-0 overflow-hidden
+    - Changed App container to w-screen h-screen overflow-hidden
+    - Set map div to absolute inset-0 w-full h-full
+    - Added #map { @apply h-screen w-full } rule
+
+  White Border Issue Analysis:
+  • Problem: Thick white borders (~1.5") persist on right and bottom edges
+  • Root Cause Hypothesis:
+    - The map container might not be accounting for the fixed layer controls panel width
+    - Possible viewport calculation issues with w-screen/h-screen classes
+    - Parent elements may have default padding/margin not being overridden
+    - OpenLayers map might have internal sizing constraints
+  • Previous fixes resolved initial border issues but introduced larger ones
+  • Potential solutions to try:
+    - Use 100vw/100vh directly instead of Tailwind classes
+    - Set negative margins to compensate for any parent padding
+    - Adjust OpenLayers map updateSize() after render
+    - Investigate if layer controls panel is pushing content
+
+  Testing Approach:
+  • All validation done through Playwright browser automation
+  • Tested at multiple viewport sizes (1440x900 desktop, 375x667 mobile)
+  • Visual verification with screenshots at each step
+  • Sheet drawer confirmed working on mobile, hidden on desktop
+
+  Status: In progress - main functionality working but white borders need resolution
+
+- 2025-09-16 – WHITE BORDER + VIEWPORT FIX IMPLEMENTED
+  Summary:
+  • Reworked viewport sizing so OpenLayers can consume the full browser window without white gutters on desktop or mobile.
+  • Forced an explicit `updateSize()` pass (with `ResizeObserver`) so OL responds to dynamic toolbar/viewport changes.
+  • Cleaned up `vercel.json` (removed trailing comma) to unblock production deploys.
+
+  Code Changes:
+  • `ocean-map/src/App.tsx`
+    - Added `updateMapSize()` helper that calls `map.updateSize()` on init and subsequent resize events.
+    - Swapped wrapper classes from `w-screen h-screen` to `w-full h-full` to inherit corrected root sizing.
+    - Added `window.resize` listener and `ResizeObserver` to keep the canvas synchronized with layout shifts.
+  • `ocean-map/src/globals.css`
+    - Replaced Tailwind utility mix with explicit 100%/100(d)vh sizing for `html`, `body`, and `#root`.
+    - Ensured `#map` stretches to 100% of its parent instead of relying on `h-screen`.
+  • `ocean-map/vercel.json`
+    - Removed the trailing comma in `rewrites` that caused Vercel JSON parsing failures.
+
+  Testing / Verification:
+  • `npm run build` (Vite) – success.
+  • `npm run dev` locally on 5173; verified no white borders on Chrome desktop and iOS Safari emulation.
+  • Pending: kick Vercel redeploy now that config parses again.
+
+  Follow-up:
+  • Monitor QA devices with dynamic status bars (iOS Safari, Android Chrome) to ensure ResizeObserver covers all cases.
+  • Consider adding Playwright visual regression after next sprint.
+
 - 2025-09-11 – CLEANUP RECOMMENDATIONS: Directory structure analysis completed.
   Files to Remove (Safe):
   • Temporary: .DS_Store files, .noaa.pid, .vite.pid, *.log files
@@ -419,6 +484,8 @@ Time Log
 - 2025-09-12 – Codex CLI – Implemented `VITE_API_BASE` integration in ocean-map and documented deployment path; completed agreed cleanup in Maps.
 - 2025-09-11 21:30 – Claude Code (Tool 2) – VERCEL DEPLOYMENT SUCCESS: SST layers and fishing spots now working in production – files: ocean-map/api/grid.js, ocean-map/vercel.json, Vercel env vars – Next: Monitor performance and user feedback for any adjustments needed.
 - 2025-09-11 21:45 – Claude Code (Tool 2) – MOBILE FIXES IMPLEMENTED: Created enhanced serverless function and mobile-friendly fishing spots layer – files: ocean-map/api/grid-fixed.js, ocean-map/src/layers/FishingSpotsLayerMobile.js – Next: Deploy fixes and test on mobile devices.
+- 2025-09-15 20:40 – Claude Code (Tool 2) – MOBILE UI FIXES & WHITE BORDER RESOLUTION: Implemented mobile-responsive Sheet drawer for layer controls, fixed multiple white border issues – files: ocean-map/src/components/LayerControlsPremium.tsx, ocean-map/src/components/ui/sheet.tsx, ocean-map/src/globals.css, ocean-map/src/App.tsx – Next: Final white border fix needed for right/bottom edges showing on desktop view.
+- 2025-09-16 12:10 – Codex CLI (Tool 2) – WHITE BORDER RESOLUTION + VERCEL CONFIG FIX: Updated viewport sizing (App.tsx, globals.css) with ResizeObserver + map.updateSize calls; removed trailing comma from ocean-map/vercel.json. Next: Trigger Vercel redeploy and spot-check on mobile hardware.
 
 Exact Changes – Codex CLI (2025-09-12)
 
@@ -454,6 +521,29 @@ Cleanup commands executed
   - `rm -rf Maps/.claude` (kept `Maps/.codex`)
 
 No other files were modified.
+
+---
+
+## 🚨 CURRENT VERCEL BUILD ISSUE (2025-09-16)
+
+### **What’s Breaking**
+- Initial runtime error cleared, but latest Vercel run fails with `Unknown command: "build"` because Vercel tries to execute `npm build` instead of `npm run build`.
+- Root cause: framework auto-detection fell back to generic settings (likely because of duplicate `Maps/ocean-map` copy), so the build command needs to be overridden.
+
+### **Fixes Applied / Pending**
+- Removed the explicit runtime block in both `vercel.json` files (`nodejs20.x` is Vercel’s default now) so the runtime error is resolved.
+- Pushed commit `46062de chore: rely on default vercel runtime` so production uses the updated configs.
+- In Vercel → Project Settings → Build & Development:
+  - Set **Root Directory** to `ocean-map`.
+  - Override **Build Command** to `npm run build` and **Install Command** to `npm install` (or leave default).
+  - Set **Output Directory** to `dist`.
+- Recommend deleting or archiving the duplicate `Maps/ocean-map` folder once the deploy succeeds to avoid future drift.
+- New 2025-09-16: Adjusted NOAA handler (`api/grid.js`) to clamp bounds and request ERDDAP with explicit strides so the upstream dataset stops returning HTTP 500.
+
+### **What’s Working**
+- Local dev (`npm install && npm run dev` from `ocean-map/`) renders SST and fishing layers correctly.
+- GitHub repo `gtsukada01/sd-temps` is up to date with the fixes.
+- Removing the runtime block ensures Vercel can fall back to its managed Node runtime; manual overrides no longer required.
 
 ---
 

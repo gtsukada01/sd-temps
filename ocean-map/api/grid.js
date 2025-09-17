@@ -14,22 +14,46 @@ export default async function handler(req, res) {
   try {
     const { lat = 32.7, lon = -117.2, size = 15, region = 2.0 } = req.query;
 
-    const centerLat = parseFloat(lat);
-    const centerLon = parseFloat(lon);
-    const regionSize = parseFloat(region);
-    const gridSize = parseInt(size);
+    const centerLat = Number.parseFloat(lat);
+    const centerLon = Number.parseFloat(lon);
+    const regionSize = Number.parseFloat(region);
+    const gridSize = Number.isFinite(Number.parseInt(size)) ? Number.parseInt(size) : 40;
 
-    // Calculate bounds
-    const south = centerLat - regionSize;
-    const north = centerLat + regionSize;
-    const west = centerLon - regionSize;
-    const east = centerLon + regionSize;
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+    // Clamp region to stay within dataset bounds and avoid zero-span requests
+    const south = clamp(centerLat - regionSize, -89.5, 89.5);
+    const north = clamp(centerLat + regionSize, -89.5, 89.5);
+    const westRaw = centerLon - regionSize;
+    const eastRaw = centerLon + regionSize;
+
+    const west = clamp(Math.min(westRaw, eastRaw), -179.5, 179.5);
+    const east = clamp(Math.max(westRaw, eastRaw), -179.5, 179.5);
+
+    const latSpan = Math.max(Math.abs(north - south), 0.1);
+    const lonSpan = Math.max(Math.abs(east - west), 0.1);
+
+    // Dataset native resolution is ~0.01°; compute stride so we do not fetch excessive points
+    const datasetResolution = 0.01;
+    const targetSamples = Math.min(Math.max(Number.isFinite(gridSize) ? gridSize : 100, 20), 200);
+    const computeStride = (span) => {
+      if (!Number.isFinite(span) || span <= 0) return 1;
+      const approxStep = span / Math.max(targetSamples - 1, 1);
+      return Math.max(1, Math.round(approxStep / datasetResolution));
+    };
+
+    const latStride = computeStride(latSpan);
+    const lonStride = computeStride(lonSpan);
 
     // Build ERDDAP JSON URL (try normal then reversed latitude order)
     const base = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.json';
-    const buildUrl = (southV, northV) => (
-      `${base}?analysed_sst[(last)][${southV}:${northV}][${west}:${east}]`
-    );
+    const buildUrl = (latA, latB) => {
+      const southV = Math.min(latA, latB);
+      const northV = Math.max(latA, latB);
+      return (
+        `${base}?analysed_sst[(last)][(${southV.toFixed(4)}):${latStride}:(${northV.toFixed(4)})][(${west.toFixed(4)}):${lonStride}:(${east.toFixed(4)})]`
+      );
+    };
 
     const urls = [
       buildUrl(south, north),
